@@ -11,6 +11,7 @@ SERVER=monitor.lan                      # URL of CheckMK-server
 INSTANCE=monitoring                     # Name of the instace on the server
 AGENT=check-mk-agent_2.2.0p17-1_all.deb # Name of the current agent-file on the sever
 INSTALLAGENT=YES                        # Should the agent be installed if not already there?
+SERVERUSER=cmkadmin                     # User to register agent with
 
 # Which plugins should be installed. Activate with "YES"
 
@@ -33,12 +34,18 @@ PLUGINSDIR=/usr/lib/check_mk_agent/plugins
 AGENTURL=https://$SERVER/$INSTANCE/check_mk/agents/$AGENT
 
 # Downloads the plugin from the server
-# load_plugin PLUGINNAME
+# load_plugin PLUGINNAME DESTINATION
 load_plugin()
 {
-    wget --no-check-certificate https://$SERVER/$INSTANCE/check_mk/agents/plugins/$1
-    chmod 755 $1
+   if [ -n $2 ]; then
+        PREFIX=$2       
+else
+        PREFIX=$PLUGINSDIR
+   fi
+    wget --no-check-certificate -P $PREFIX https://$SERVER/$INSTANCE/check_mk/agents/plugins/$1
+    chmod 755 $PREFIX/$1
 }
+
 
 # Downloads the plugin from the server for asynchronous start.
 # load_plugin_async PLUGINNAME DELAY_IN_SECONDS
@@ -47,15 +54,16 @@ load_plugin_async()
     if [ ! -d $PLUGINSDIR/$2 ]; then
         mkdir $PLUGINSDIR/$DELAY
     fi
-    cd $PLUGINSDIR/$DELAY
-    load_plugin $1
+#    cd $PLUGINSDIR/$DELAY
+    DESTINATION=$PLUGINSDIR/$DELAY
+    load_plugin $1 $DESTINATION
 }
 
 ####
 # check for root
 if [ `id -u` -ne 0 ]; then
-	echo "This script must be run as root."
-	exit 1
+        echo "This script must be run as root."
+        exit 1
 fi
 
 if [ $INSTALLAGENT = "YES" ]; then
@@ -67,8 +75,8 @@ if [ $INSTALLAGENT = "YES" ]; then
     if ! dpkg -l | grep check-mk-agent; then
         echo "CheckMK-agent is not installed, it will be downloaded and installed now."
         cd /tmp
-        wget $AGENTURL
-        dpkg -i /tmp/check-mk-agent_2.1.0b1-1_all.deb
+        wget --no-check-certificate -P '/tmp' $AGENTURL
+        dpkg -i /tmp/$AGENT
         rm /tmp/$AGENT
 #register the agent on the server
         echo "Now we will try to register the agent."
